@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'dart:developer' as developer;
+import 'dart:ui';
 import 'mrz_parser.dart';
 import 'passport_form_screen.dart';
 
@@ -32,7 +33,16 @@ class MRZScannerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'MRZ Passport Scanner',
-      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
+      theme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blueAccent,
+          brightness: Brightness.dark,
+        ),
+        primaryColor: Colors.blueAccent,
+        scaffoldBackgroundColor: const Color(0xFF0F172A),
+      ),
       home: const MRZScannerScreen(),
       debugShowCheckedModeBanner: false,
     );
@@ -254,9 +264,19 @@ class _MRZScannerScreenState extends State<MRZScannerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Passport MRZ Scanner'),
+        title: const Text(
+          'SCANNER',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            letterSpacing: 2.0,
+            fontSize: 18,
+          ),
+        ),
         centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
       body: _isInitialized
           ? Stack(
@@ -264,87 +284,236 @@ class _MRZScannerScreenState extends State<MRZScannerScreen> {
                 // Camera Preview
                 SizedBox.expand(child: CameraPreview(_cameraController!)),
 
-                // MRZ Frame Guide
-                Center(
-                  child: Container(
-                    width: MediaQuery.of(context).size.width * 0.9,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.green, width: 3),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'Align MRZ here',
-                        style: TextStyle(
-                          color: Colors.green,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          backgroundColor: Colors.black54,
+                // Technical Overlay
+                _buildTechOverlay(),
+
+                // Status Message Glass
+                Positioned(
+                  top: 120,
+                  left: 24,
+                  right: 24,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 16,
+                          horizontal: 20,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.15),
+                          ),
+                        ),
+                        child: Text(
+                          _statusMessage.toUpperCase(),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.1,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
 
-                // Status Message
-                Positioned(
-                  top: 20,
-                  left: 20,
-                  right: 20,
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.black87,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      _statusMessage,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
-                    ),
-                  ),
-                ),
-
                 // Capture Button
                 Positioned(
-                  bottom: 40,
+                  bottom: 60,
                   left: 0,
                   right: 0,
                   child: Center(
-                    child: FloatingActionButton.extended(
-                      onPressed: _isProcessing ? null : _captureAndProcess,
-                      icon: _isProcessing
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Icon(Icons.camera),
-                      label: Text(
-                        _isProcessing ? 'Processing...' : 'Scan Passport',
+                    child: Container(
+                      decoration: BoxDecoration(
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.blueAccent.withOpacity(0.3),
+                            blurRadius: 20,
+                            spreadRadius: 5,
+                          ),
+                        ],
                       ),
-                      backgroundColor: _isProcessing
-                          ? Colors.grey
-                          : Colors.blue,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(30),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                          child: ElevatedButton.icon(
+                            onPressed: _isProcessing
+                                ? null
+                                : _captureAndProcess,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _isProcessing
+                                  ? Colors.grey.withOpacity(0.3)
+                                  : Colors.blueAccent.withOpacity(0.9),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 40,
+                                vertical: 18,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                              elevation: 0,
+                            ),
+                            icon: _isProcessing
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.qr_code_scanner_rounded,
+                                    color: Colors.white,
+                                    size: 24,
+                                  ),
+                            label: Text(
+                              _isProcessing ? 'SCANNING...' : 'SCAN PASSPORT',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.5,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ],
             )
-          : Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 20),
-                  Text(_statusMessage),
-                ],
+          : Container(
+              color: const Color(0xFF0F172A),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const CircularProgressIndicator(color: Colors.blueAccent),
+                    const SizedBox(height: 32),
+                    Text(
+                      _statusMessage.toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        letterSpacing: 2.0,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
+    );
+  }
+
+  Widget _buildTechOverlay() {
+    return Stack(
+      children: [
+        // Mask with a hole
+        ColorFiltered(
+          colorFilter: ColorFilter.mode(
+            Colors.black.withOpacity(0.6),
+            BlendMode.srcOut,
+          ),
+          child: Stack(
+            children: [
+              Container(
+                decoration: const BoxDecoration(
+                  color: Colors.black,
+                  backgroundBlendMode: BlendMode.dstOut,
+                ),
+              ),
+              Align(
+                alignment: Alignment.center,
+                child: Container(
+                  width: MediaQuery.of(context).size.width * 0.9,
+                  height: 160,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Decorative frame
+        Align(
+          alignment: Alignment.center,
+          child: SizedBox(
+            width: MediaQuery.of(context).size.width * 0.9,
+            height: 160,
+            child: Stack(
+              children: [
+                // Animated Frame Corners
+                _buildFrameCorner(topLeft: true),
+                _buildFrameCorner(topRight: true),
+                _buildFrameCorner(bottomLeft: true),
+                _buildFrameCorner(bottomRight: true),
+
+                // Scanning Line Animation placeholder (visual only)
+                Center(
+                  child: Container(
+                    width: double.infinity,
+                    height: 1,
+                    decoration: BoxDecoration(
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.blueAccent.withOpacity(0.5),
+                          blurRadius: 10,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFrameCorner({
+    bool topLeft = false,
+    bool topRight = false,
+    bool bottomLeft = false,
+    bool bottomRight = false,
+  }) {
+    return Positioned(
+      top: (topLeft || topRight) ? 0 : null,
+      bottom: (bottomLeft || bottomRight) ? 0 : null,
+      left: (topLeft || bottomLeft) ? 0 : null,
+      right: (topRight || bottomRight) ? 0 : null,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          border: Border(
+            top: (topLeft || topRight)
+                ? const BorderSide(color: Colors.blueAccent, width: 4)
+                : BorderSide.none,
+            bottom: (bottomLeft || bottomRight)
+                ? const BorderSide(color: Colors.blueAccent, width: 4)
+                : BorderSide.none,
+            left: (topLeft || bottomLeft)
+                ? const BorderSide(color: Colors.blueAccent, width: 4)
+                : BorderSide.none,
+            right: (topRight || bottomRight)
+                ? const BorderSide(color: Colors.blueAccent, width: 4)
+                : BorderSide.none,
+          ),
+        ),
+      ),
     );
   }
 }
