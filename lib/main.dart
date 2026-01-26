@@ -34,6 +34,7 @@ class MRZScannerApp extends StatelessWidget {
       title: 'MRZ Passport Scanner',
       theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
       home: const MRZScannerScreen(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
