@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:printing/printing.dart';
+import 'form_filler_service.dart';
 import 'mrz_parser.dart';
 
 class PassportFormScreen extends StatefulWidget {
@@ -59,6 +62,64 @@ class _PassportFormScreenState extends State<PassportFormScreen> {
           Navigator.pop(context);
         }
       });
+    }
+  }
+
+  Future<void> _generateForm() async {
+    try {
+      // 1. Load the HTML template
+      final String htmlTemplate = await rootBundle.loadString(
+        'assets/ncellform_pdf.html',
+      );
+
+      // 2. Fill the form with current data from controllers
+      // (Updating the PassportData object with edits made in the form)
+      final editedData = PassportData(
+        documentType:
+            _controllers['Document Type']?.text ??
+            widget.passportData.documentType,
+        issuingCountry:
+            _controllers['Issuing Country']?.text ??
+            widget.passportData.issuingCountry,
+        surname: _controllers['Surname']?.text ?? widget.passportData.surname,
+        givenNames:
+            _controllers['Given Names']?.text ?? widget.passportData.givenNames,
+        passportNumber:
+            _controllers['Passport Number']?.text ??
+            widget.passportData.passportNumber,
+        nationality:
+            _controllers['Nationality']?.text ??
+            widget.passportData.nationality,
+        dateOfBirth:
+            _controllers['Date of Birth']?.text ??
+            widget.passportData.dateOfBirth,
+        sex: _controllers['Sex']?.text ?? widget.passportData.sex,
+        expirationDate:
+            _controllers['Expiration Date']?.text ??
+            widget.passportData.expirationDate,
+        personalNumber:
+            _controllers['Personal Number']?.text ??
+            widget.passportData.personalNumber,
+      );
+
+      final String filledHtml = FormFillerService.fillForm(
+        htmlTemplate,
+        editedData,
+      );
+
+      // 3. Generate and show PDF
+      await Printing.layoutPdf(
+        onLayout: (format) async =>
+            await Printing.convertHtml(format: format, html: filledHtml),
+        name: 'Ncell_Subscription_Form.pdf',
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error generating form: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -340,6 +401,50 @@ class _PassportFormScreenState extends State<PassportFormScreen> {
                 letterSpacing: 1.5,
                 color: Colors.white,
               ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          height: 56,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: const LinearGradient(
+              colors: [Colors.purpleAccent, Colors.deepPurpleAccent],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.purpleAccent.withOpacity(0.3),
+                blurRadius: 15,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: ElevatedButton(
+            onPressed: _generateForm,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.picture_as_pdf_rounded, color: Colors.white),
+                SizedBox(width: 8),
+                Text(
+                  'GENERATE FORM (PDF)',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.5,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
