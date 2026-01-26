@@ -302,11 +302,9 @@ class _MRZScannerScreenState extends State<MRZScannerScreen> {
                           horizontal: 20,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
+                          color: Colors.white.withAlpha(20),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.15),
-                          ),
+                          border: Border.all(color: Colors.white.withAlpha(38)),
                         ),
                         child: Text(
                           _statusMessage.toUpperCase(),
@@ -333,7 +331,7 @@ class _MRZScannerScreenState extends State<MRZScannerScreen> {
                       decoration: BoxDecoration(
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.blueAccent.withOpacity(0.3),
+                            color: Colors.blueAccent.withAlpha(63),
                             blurRadius: 20,
                             spreadRadius: 5,
                           ),
@@ -349,8 +347,8 @@ class _MRZScannerScreenState extends State<MRZScannerScreen> {
                                 : _captureAndProcess,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: _isProcessing
-                                  ? Colors.grey.withOpacity(0.3)
-                                  : Colors.blueAccent.withOpacity(0.9),
+                                  ? Colors.grey.withAlpha(63)
+                                  : Colors.blueAccent.withAlpha(63),
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 40,
@@ -420,7 +418,7 @@ class _MRZScannerScreenState extends State<MRZScannerScreen> {
         // Mask with a hole
         ColorFiltered(
           colorFilter: ColorFilter.mode(
-            Colors.black.withOpacity(0.6),
+            Colors.black.withAlpha(153),
             BlendMode.srcOut,
           ),
           child: Stack(
@@ -467,7 +465,7 @@ class _MRZScannerScreenState extends State<MRZScannerScreen> {
                     decoration: BoxDecoration(
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.blueAccent.withOpacity(0.5),
+                          color: Colors.blueAccent.withAlpha(127),
                           blurRadius: 10,
                           spreadRadius: 2,
                         ),
