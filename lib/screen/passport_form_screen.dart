@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:mrzreader/model/passport_data.dart';
 import 'package:printing/printing.dart';
-import 'form_filler_service.dart';
-import 'mrz_parser.dart';
+import '../service/form_filler_service.dart';
 
 class PassportFormScreen extends StatefulWidget {
   final PassportData passportData;

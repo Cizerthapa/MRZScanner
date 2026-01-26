@@ -1,4 +1,4 @@
-import 'mrz_parser.dart';
+import 'package:mrzreader/model/passport_data.dart';
 
 class FormFillerService {
   static String fillForm(String htmlTemplate, PassportData data) {
