@@ -179,34 +179,4 @@ class MRZParser {
     String section = line.substring(start, end + 1);
     return section.replaceAll('<', '').trim();
   }
-
-  // ignore: unused_element
-  static bool _verifyCheckDigit(String data, String checkDigit) {
-    if (checkDigit == '<') return true; // Optional field
-
-    int calculated = _calculateCheckDigit(data);
-    return calculated == int.tryParse(checkDigit);
-  }
-
-  static int _calculateCheckDigit(String input) {
-    const weights = [7, 3, 1];
-    int sum = 0;
-
-    for (int i = 0; i < input.length; i++) {
-      String char = input[i];
-      int value;
-
-      if (char == '<') {
-        value = 0;
-      } else if (RegExp(r'[0-9]').hasMatch(char)) {
-        value = int.parse(char);
-      } else {
-        value = char.codeUnitAt(0) - 'A'.codeUnitAt(0) + 10;
-      }
-
-      sum += value * weights[i % 3];
-    }
-
-    return sum % 10;
-  }
 }

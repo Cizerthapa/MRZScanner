@@ -1,4 +1,5 @@
 import 'dart:developer' as developer;
+import 'dart:math';
 import 'dart:ui';
 
 import 'package:camera/camera.dart';
@@ -8,6 +9,8 @@ import 'package:mrzreader/main.dart';
 import 'package:mrzreader/model/passport_data.dart';
 import 'package:mrzreader/service/mrz_parser.dart';
 import 'package:mrzreader/screen/passport_form_screen.dart';
+import 'package:mrzreader/util/camera_helper.dart';
+import 'package:flutter/services.dart';
 
 class MRZScannerScreen extends StatefulWidget {
   const MRZScannerScreen({super.key});
@@ -16,188 +19,453 @@ class MRZScannerScreen extends StatefulWidget {
   State<MRZScannerScreen> createState() => _MRZScannerScreenState();
 }
 
-class _MRZScannerScreenState extends State<MRZScannerScreen> {
+class _MRZScannerScreenState extends State<MRZScannerScreen>
+    with WidgetsBindingObserver {
+  static const String _logName = 'mrzreader.scanner';
   CameraController? _cameraController;
   final TextRecognizer _textRecognizer = TextRecognizer();
   bool _isProcessing = false;
   bool _isInitialized = false;
   String _statusMessage = 'Initializing camera...';
+  int _frameCount = 0;
+  int _lastLoggedFrame = 0;
+  DateTime? _lastProcessingTime;
+  List<String> _lastMRZAttempts = [];
+  // ignore: unused_field
+  String? _lastRawText;
 
   @override
   void initState() {
     super.initState();
+    developer.log('MRZScannerScreen initState called', name: _logName);
+    WidgetsBinding.instance.addObserver(this);
     _initializeCamera();
   }
 
   Future<void> _initializeCamera() async {
-    developer.log('Initializing camera...', name: 'mrzreader.camera');
-    if (cameras.isEmpty) {
-      developer.log(
-        'No cameras available',
-        name: 'mrzreader.camera',
-        level: 900,
-      );
-      setState(() {
-        _statusMessage = 'No cameras available';
-      });
-      return;
-    }
-
-    _cameraController = CameraController(
-      cameras[0],
-      ResolutionPreset.high,
-      enableAudio: false,
-    );
+    developer.log('Starting camera initialization...', name: _logName);
 
     try {
-      await _cameraController!.initialize();
+      if (cameras.isEmpty) {
+        developer.log(
+          '⚠️ No cameras available in camera list',
+          name: _logName,
+          level: 900,
+        );
+        setState(() {
+          _statusMessage = 'No cameras available';
+        });
+        return;
+      }
+
+      developer.log('Found ${cameras.length} camera(s)', name: _logName);
+      for (var i = 0; i < cameras.length; i++) {
+        developer.log(
+          'Camera $i: ${cameras[i].name} (${cameras[i].lensDirection.name}) - ',
+          name: _logName,
+        );
+      }
+
+      final selectedCamera = cameras[0];
       developer.log(
-        'Camera initialized successfully',
-        name: 'mrzreader.camera',
+        'Selected camera: ${selectedCamera.name} (${selectedCamera.lensDirection.name})',
+        name: _logName,
       );
+
+      _cameraController = CameraController(
+        selectedCamera,
+        ResolutionPreset.high,
+        enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.bgra8888,
+      );
+
+      developer.log(
+        'CameraController created, starting initialization...',
+        name: _logName,
+      );
+
+      await _cameraController!
+          .initialize()
+          .then((_) {
+            developer.log(
+              '✅ Camera controller initialized successfully',
+              name: _logName,
+            );
+
+            return _cameraController!.setExposureMode(ExposureMode.auto);
+          })
+          .then((_) {
+            developer.log('✅ Exposure mode set to auto', name: _logName);
+
+            return _cameraController!.setFocusMode(FocusMode.auto);
+          })
+          .then((_) {
+            developer.log('✅ Focus mode set to auto', name: _logName);
+          });
+
+      final cameraValue = _cameraController!.value;
+      developer.log(
+        'Camera properties:\n'
+        '  - Resolution: ${cameraValue.previewSize?.width}x${cameraValue.previewSize?.height}\n'
+        '  - Is streaming: ${cameraValue.isStreamingImages}\n'
+        '  - Exposure mode: ${cameraValue.exposureMode.name}\n'
+        '  - Focus mode: ${cameraValue.focusMode.name}\n'
+        '  - Sensor orientation: ${cameraValue.deviceOrientation}',
+        name: _logName,
+      );
+
+      developer.log('✅ Camera fully initialized', name: _logName);
+
       setState(() {
         _isInitialized = true;
-        _statusMessage = 'Position passport MRZ area in frame';
+        _statusMessage = 'Align passport MRZ code within the frame';
       });
-    } catch (e) {
+
+      _startScanning();
+    } on CameraException catch (e) {
       developer.log(
-        'Camera initialization failed',
+        '❌ CameraException during initialization:',
         error: e,
-        name: 'mrzreader.camera',
+        name: _logName,
         level: 1000,
       );
+      developer.log('  Code: ${e.code}', name: _logName);
+      developer.log('  Description: ${e.description}', name: _logName);
       setState(() {
-        _statusMessage = 'Camera initialization failed: $e';
+        _statusMessage = 'Camera error: ${e.code}';
+      });
+    } catch (e, stackTrace) {
+      developer.log(
+        '❌ Unexpected error during camera initialization:',
+        error: e,
+        name: _logName,
+        level: 1000,
+      );
+      developer.log('Stack trace: $stackTrace', name: _logName);
+      setState(() {
+        _statusMessage = 'Initialization failed: ${e.toString()}';
       });
     }
   }
 
-  Future<void> _captureAndProcess() async {
-    if (_isProcessing ||
-        _cameraController == null ||
-        !_cameraController!.value.isInitialized) {
+  void _startScanning() {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
       developer.log(
-        'Capture skipped: isProcessing=$_isProcessing, cameraReady=${_cameraController?.value.isInitialized}',
-        name: 'mrzreader.scanner',
+        'Cannot start scanning: Camera not initialized',
+        name: _logName,
       );
       return;
     }
 
-    setState(() {
-      _isProcessing = true;
-      _statusMessage = 'Processing...';
-    });
-
-    developer.log('Capturing picture...', name: 'mrzreader.scanner');
+    if (_cameraController!.value.isStreamingImages) {
+      developer.log('Camera already streaming', name: _logName);
+      return;
+    }
 
     try {
-      final XFile image = await _cameraController!.takePicture();
+      developer.log('🚀 Starting camera image stream...', name: _logName);
+      _cameraController!.startImageStream(_processFrame);
+      _frameCount = 0;
+      _lastLoggedFrame = 0;
+      developer.log('✅ Camera stream started successfully', name: _logName);
+    } on CameraException catch (e) {
       developer.log(
-        'Picture captured: ${image.path}',
-        name: 'mrzreader.scanner',
-      );
-
-      final InputImage inputImage = InputImage.fromFilePath(image.path);
-      developer.log(
-        'Processing image with ML Kit...',
-        name: 'mrzreader.scanner',
-      );
-
-      final RecognizedText recognizedText = await _textRecognizer.processImage(
-        inputImage,
-      );
-      developer.log(
-        'Text recognition completed. Length: ${recognizedText.text.length}',
-        name: 'mrzreader.scanner',
-      );
-
-      // Extract potential MRZ lines
-      List<String> mrzLines = _extractMRZLines(recognizedText.text);
-      developer.log(
-        'Found ${mrzLines.length} potential MRZ lines',
-        name: 'mrzreader.scanner',
-      );
-
-      if (mrzLines.length >= 2) {
-        // Parse MRZ
-        developer.log(
-          'Attempting to parse MRZ lines...',
-          name: 'mrzreader.scanner',
-        );
-        PassportData? passportData = MRZParser.parse(mrzLines);
-
-        if (passportData != null) {
-          developer.log('MRZ parsed successfully', name: 'mrzreader.scanner');
-          // Navigate to form screen
-          if (mounted) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) =>
-                    PassportFormScreen(passportData: passportData),
-              ),
-            );
-          }
-        } else {
-          developer.log(
-            'Failed to parse MRZ data',
-            name: 'mrzreader.scanner',
-            level: 900,
-          );
-          setState(() {
-            _statusMessage = 'Failed to parse MRZ. Try again.';
-          });
-        }
-      } else {
-        developer.log(
-          'Insufficient MRZ lines detected',
-          name: 'mrzreader.scanner',
-        );
-        setState(() {
-          _statusMessage = 'MRZ not detected. Please align passport properly.';
-        });
-      }
-    } catch (e) {
-      developer.log(
-        'Error during capture/process',
+        '❌ CameraException starting image stream:',
         error: e,
-        name: 'mrzreader.scanner',
+        name: _logName,
         level: 1000,
       );
       setState(() {
-        _statusMessage = 'Error: $e';
+        _statusMessage = 'Stream error: ${e.code}';
       });
-    } finally {
-      setState(() {
-        _isProcessing = false;
-      });
+    } catch (e, stackTrace) {
+      developer.log(
+        '❌ Unexpected error starting image stream:',
+        error: e,
+        name: _logName,
+        level: 1000,
+      );
+      developer.log('Stack trace: $stackTrace', name: _logName);
+    }
+  }
 
-      // Reset status message after 2 seconds
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted && !_isProcessing) {
-          setState(() {
-            _statusMessage = 'Position passport MRZ area in frame';
-          });
+  void _stopScanning() {
+    if (_cameraController != null &&
+        _cameraController!.value.isStreamingImages) {
+      developer.log('🛑 Stopping camera image stream...', name: _logName);
+      _cameraController!.stopImageStream();
+      developer.log('✅ Camera stream stopped', name: _logName);
+
+      // Log scanning statistics
+      developer.log(
+        '📊 Scanning Statistics:\n'
+        '  - Total frames processed: $_frameCount\n'
+        '  - Last processing time: ${_lastProcessingTime?.toIso8601String() ?? "N/A"}\n'
+        '  - Last MRZ attempts: ${_lastMRZAttempts.length}\n'
+        '  - Is processing flag: $_isProcessing',
+        name: _logName,
+      );
+    }
+  }
+
+  Future<void> _processFrame(CameraImage image) async {
+    _frameCount++;
+
+    // Log frame count every 30 frames
+    if (_frameCount - _lastLoggedFrame >= 30) {
+      developer.log(
+        '📸 Processing frame $_frameCount '
+        '(Image format: ${image.format.group.name}, '
+        'Size: ${image.width}x${image.height}, '
+        'Planes: ${image.planes.length})',
+        name: _logName,
+      );
+      _lastLoggedFrame = _frameCount;
+    }
+
+    if (_isProcessing) {
+      if (_frameCount % 10 == 0) {
+        developer.log(
+          '⏳ Skipping frame $_frameCount - still processing previous frame',
+          name: _logName,
+        );
+      }
+      return;
+    }
+
+    if (!mounted) {
+      developer.log('⚠️ Skipping frame - widget not mounted', name: _logName);
+      return;
+    }
+
+    _isProcessing = true;
+    final startTime = DateTime.now();
+    _lastProcessingTime = startTime;
+
+    try {
+      developer.log('🔄 Frame $_frameCount processing started', name: _logName);
+
+      // Convert CameraImage to InputImage
+      final inputImage = CameraHelper.inputImageFromCameraImage(
+        image: image,
+        camera: cameras[0],
+        sensorOrientation: cameras[0].sensorOrientation,
+        deviceOrientation: DeviceOrientation.portraitUp,
+      );
+
+      if (inputImage == null) {
+        developer.log(
+          '⚠️ InputImage conversion failed for frame $_frameCount',
+          name: _logName,
+        );
+        _isProcessing = false;
+        return;
+      }
+
+      developer.log(
+        '✅ InputImage created: ',
+        //${inputImage.bitmapData}x',
+        // 'type: ${inputImage.type}'
+        // 'rotation: ${inputImage.rotation}'
+        // 'bytes: ${inputImage.bytes}'
+        // 'metadata: ${inputImage.metadata}',
+        name: _logName,
+      );
+
+      // Perform text recognition
+      developer.log('🔍 Starting text recognition...', name: _logName);
+      final RecognizedText recognizedText = await _textRecognizer.processImage(
+        inputImage,
+      );
+
+      final processingTime = DateTime.now().difference(startTime);
+      developer.log(
+        '✅ Text recognition completed in ${processingTime.inMilliseconds}ms\n'
+        '   Blocks: ${recognizedText.blocks.length}\n'
+        '   Text length: ${recognizedText.text.length}',
+        name: _logName,
+      );
+
+      // Store raw text for debugging
+      _lastRawText = recognizedText.text;
+      if (recognizedText.text.length > 0 && _frameCount % 20 == 0) {
+        developer.log(
+          '📝 Raw recognized text (sample):\n'
+          '${recognizedText.text.substring(0, min(200, recognizedText.text.length))}${recognizedText.text.length > 200 ? '...' : ''}',
+          name: _logName,
+        );
+      }
+
+      // Extract potential MRZ lines
+      List<String> mrzLines = _extractMRZLines(recognizedText.text);
+      _lastMRZAttempts = mrzLines;
+
+      if (mrzLines.isNotEmpty) {
+        developer.log(
+          '🎯 Found ${mrzLines.length} potential MRZ line(s):',
+          name: _logName,
+        );
+        for (var i = 0; i < mrzLines.length; i++) {
+          developer.log(
+            '  Line $i (${mrzLines[i].length} chars): ${mrzLines[i]}',
+            name: _logName,
+          );
         }
-      });
+
+        if (mrzLines.length >= 2) {
+          developer.log('📋 Attempting to parse MRZ lines...', name: _logName);
+          PassportData? passportData = MRZParser.parse(mrzLines);
+
+          if (passportData != null) {
+            final totalTime = DateTime.now().difference(startTime);
+            developer.log(
+              '✅✅✅ MRZ PARSED SUCCESSFULLY! 🎉\n'
+              '   Total processing time: ${totalTime.inMilliseconds}ms\n'
+              '   Document number: ${passportData.passportNumber}\n'
+              '   Name: ${passportData.givenNames}\n'
+              '   Nationality: ${passportData.nationality}\n'
+              '   Date of birth: ${passportData.dateOfBirth}\n'
+              '   Gender: ${passportData.sex}',
+              name: _logName,
+            );
+
+            _stopScanning();
+
+            if (mounted) {
+              developer.log(
+                '🚀 Navigating to PassportFormScreen',
+                name: _logName,
+              );
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      PassportFormScreen(passportData: passportData),
+                ),
+              ).then((_) {
+                developer.log(
+                  '↩️ Returned from PassportFormScreen',
+                  name: _logName,
+                );
+                if (mounted) {
+                  _isProcessing = false;
+                  _startScanning();
+                }
+              });
+            }
+            return;
+          } else {
+            developer.log(
+              '❌ MRZ parsing failed - invalid format',
+              name: _logName,
+            );
+          }
+        } else {
+          if (_frameCount % 25 == 0) {
+            developer.log(
+              '🔍 Need at least 2 MRZ lines, found ${mrzLines.length}',
+              name: _logName,
+            );
+          }
+        }
+      } else {
+        if (_frameCount % 50 == 0) {
+          developer.log(
+            '🔍 No MRZ lines detected in frame $_frameCount',
+            name: _logName,
+          );
+        }
+      }
+
+      // Add throttling delay between frames
+      final delay = const Duration(milliseconds: 300);
+      developer.log(
+        '⏱️ Adding ${delay.inMilliseconds}ms delay before next frame',
+        name: _logName,
+      );
+      await Future.delayed(delay);
+    } on PlatformException catch (e) {
+      developer.log(
+        '❌ PlatformException during frame processing:',
+        error: e,
+        name: _logName,
+        level: 1000,
+      );
+      developer.log('Code: ${e.code}', name: _logName);
+      developer.log('Message: ${e.message}', name: _logName);
+      developer.log('Details: ${e.details}', name: _logName);
+    } catch (e, stackTrace) {
+      developer.log(
+        '❌ Unexpected error during frame processing:',
+        error: e,
+        name: _logName,
+        level: 1000,
+      );
+      developer.log('Stack trace: $stackTrace', name: _logName);
+
+      // Add error recovery delay
+      await Future.delayed(const Duration(seconds: 1));
+    } finally {
+      if (mounted) {
+        _isProcessing = false;
+        final totalTime = DateTime.now().difference(startTime);
+        if (_frameCount % 15 == 0) {
+          developer.log(
+            '🏁 Frame $_frameCount processing completed in ${totalTime.inMilliseconds}ms',
+            name: _logName,
+          );
+        }
+      } else {
+        developer.log(
+          '⚠️ Frame processing completed but widget not mounted',
+          name: _logName,
+        );
+      }
     }
   }
 
   List<String> _extractMRZLines(String text) {
-    List<String> lines = text.split('\n');
-    List<String> mrzLines = [];
+    final lines = text.split('\n');
+    final mrzLines = <String>[];
 
-    for (String line in lines) {
-      // Clean and filter lines that look like MRZ
-      String cleaned = line
+    developer.log(
+      '📄 Extracting MRZ lines from ${lines.length} text lines',
+      name: _logName,
+    );
+
+    for (var i = 0; i < lines.length; i++) {
+      final originalLine = lines[i];
+      final cleaned = originalLine
           .replaceAll(' ', '')
           .replaceAll('.', '')
-          .toUpperCase();
+          .replaceAll(',', '')
+          .replaceAll(';', '')
+          .toUpperCase()
+          .trim();
 
-      // MRZ lines are typically 30, 36, or 44 characters long
-      // and contain mostly uppercase letters, numbers, and '<' characters
-      if (cleaned.length >= 30 && _looksLikeMRZ(cleaned)) {
+      if (cleaned.isEmpty) continue;
+
+      final length = cleaned.length;
+      final looksLikeMRZ = _looksLikeMRZ(cleaned);
+
+      // Relaxed length requirements - allow ±3 characters for OCR errors
+      if (looksLikeMRZ && length >= 27) {
+        // Changed from strict 30/36/44
+        developer.log(
+          '✅ Line $i qualifies as MRZ: $cleaned (Length: $length)',
+          name: _logName,
+        );
         mrzLines.add(cleaned);
+      } else {
+        if (length >= 25 && _frameCount % 40 == 0) {
+          developer.log(
+            '❌ Line $i rejected as MRZ:\n'
+            '   Original: "$originalLine"\n'
+            '   Cleaned: "$cleaned"\n'
+            '   Length: $length, LooksLikeMRZ: $looksLikeMRZ',
+            name: _logName,
+          );
+        }
       }
     }
 
@@ -205,24 +473,138 @@ class _MRZScannerScreenState extends State<MRZScannerScreen> {
   }
 
   bool _looksLikeMRZ(String line) {
-    // MRZ contains A-Z, 0-9, and < characters
-    RegExp mrzPattern = RegExp(r'^[A-Z0-9<]+$');
-    if (!mrzPattern.hasMatch(line)) return false;
+    if (line.isEmpty) return false;
 
-    // Should have some '<' characters (used as fillers)
-    int angleCount = '<'.allMatches(line).length;
-    return angleCount >= 2;
+    // MRZ contains A-Z, 0-9, and < characters
+    final mrzPattern = RegExp(r'^[A-Z0-9<]+$');
+    if (!mrzPattern.hasMatch(line)) {
+      return false;
+    }
+
+    // Count specific characters
+    final angleCount = '<'.allMatches(line).length;
+    final digitCount = RegExp(r'[0-9]').allMatches(line).length;
+    final letterCount = RegExp(r'[A-Z]').allMatches(line).length;
+
+    // Calculate ratios
+    final totalChars = line.length;
+    final digitRatio = digitCount / totalChars;
+    final letterRatio = letterCount / totalChars;
+
+    // Typical MRZ characteristics - RELAXED RULES:
+    final hasAngles = angleCount >= 1; // Changed from 2 to 1
+    final hasReasonableMix =
+        digitRatio > 0.05 && letterRatio > 0.2; // More lenient
+    final startsWithDocType =
+        line.startsWith('P<') ||
+        line.startsWith('PB') || // Added - your passport shows "PB"
+        line.startsWith('V<') ||
+        line.startsWith('I<') ||
+        line.startsWith('A<');
+
+    // Accept if EITHER has document type OR has good characteristics
+    final isLikelyMRZ =
+        hasAngles && (hasReasonableMix || startsWithDocType || angleCount >= 3);
+
+    if (_frameCount % 50 == 0 && line.length >= 25) {
+      developer.log(
+        '🔬 MRZ analysis for "$line":\n'
+        '   Length: $totalChars\n'
+        '   Angle chars: $angleCount\n'
+        '   Digits: $digitCount (${(digitRatio * 100).toStringAsFixed(1)}%)\n'
+        '   Letters: $letterCount (${(letterRatio * 100).toStringAsFixed(1)}%)\n'
+        '   Starts with doc type: $startsWithDocType\n'
+        '   Has angles: $hasAngles\n'
+        '   Has reasonable mix: $hasReasonableMix\n'
+        '   Final verdict: $isLikelyMRZ',
+        name: _logName,
+      );
+    }
+
+    return isLikelyMRZ;
   }
 
   @override
   void dispose() {
-    _cameraController?.dispose();
+    developer.log('🧹 MRZScannerScreen dispose() called', name: _logName);
+
+    WidgetsBinding.instance.removeObserver(this);
+
+    _stopScanning();
+
+    if (_cameraController != null) {
+      developer.log('Disposing camera controller...', name: _logName);
+      _cameraController!.dispose();
+    }
+
+    developer.log('Closing text recognizer...', name: _logName);
     _textRecognizer.close();
+
+    // Log final statistics
+    developer.log(
+      '📊 FINAL STATISTICS:\n'
+      '  - Total frames processed: $_frameCount\n'
+      '  - Is initialized: $_isInitialized\n'
+      '  - Is processing: $_isProcessing\n'
+      '  - Last status: $_statusMessage',
+      name: _logName,
+    );
+
     super.dispose();
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    developer.log('📱 App lifecycle state changed: $state', name: _logName);
+
+    final CameraController? cameraController = _cameraController;
+
+    if (cameraController == null || !cameraController.value.isInitialized) {
+      developer.log(
+        '⚠️ Lifecycle change ignored - camera not initialized',
+        name: _logName,
+      );
+      return;
+    }
+
+    switch (state) {
+      case AppLifecycleState.inactive:
+        developer.log('🔄 App inactive - disposing camera', name: _logName);
+        _stopScanning();
+        cameraController.dispose();
+        setState(() {
+          _isInitialized = false;
+          _statusMessage = 'Camera inactive';
+        });
+        break;
+
+      case AppLifecycleState.resumed:
+        developer.log('🔄 App resumed - reinitializing camera', name: _logName);
+        setState(() {
+          _statusMessage = 'Reinitializing camera...';
+        });
+        _initializeCamera();
+        break;
+
+      case AppLifecycleState.paused:
+        developer.log('🔄 App paused - stopping scanning', name: _logName);
+        _stopScanning();
+        break;
+
+      case AppLifecycleState.detached:
+        developer.log('🔄 App detached', name: _logName);
+        break;
+
+      case AppLifecycleState.hidden:
+        developer.log('🔄 App hidden', name: _logName);
+        break;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    developer.log('🏗️ Building MRZScannerScreen UI', name: _logName);
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -266,15 +648,29 @@ class _MRZScannerScreenState extends State<MRZScannerScreen> {
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(color: Colors.white.withAlpha(38)),
                         ),
-                        child: Text(
-                          _statusMessage.toUpperCase(),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.1,
-                          ),
+                        child: Column(
+                          children: [
+                            Text(
+                              _statusMessage.toUpperCase(),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.1,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Frame: $_frameCount | Processing: $_isProcessing',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white.withAlpha(150),
+                                fontSize: 10,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -302,13 +698,18 @@ class _MRZScannerScreenState extends State<MRZScannerScreen> {
                         child: BackdropFilter(
                           filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
                           child: ElevatedButton.icon(
-                            onPressed: _isProcessing
-                                ? null
-                                : _captureAndProcess,
+                            onPressed: () {
+                              developer.log(
+                                'Manual scan button pressed',
+                                name: _logName,
+                              );
+                              if (!_isProcessing) {
+                                _stopScanning();
+                                _startScanning();
+                              }
+                            },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _isProcessing
-                                  ? Colors.grey.withAlpha(63)
-                                  : Colors.blueAccent.withAlpha(63),
+                              backgroundColor: Colors.blueAccent.withAlpha(63),
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 40,
@@ -328,13 +729,9 @@ class _MRZScannerScreenState extends State<MRZScannerScreen> {
                                       strokeWidth: 2,
                                     ),
                                   )
-                                : const Icon(
-                                    Icons.qr_code_scanner_rounded,
-                                    color: Colors.white,
-                                    size: 24,
-                                  ),
+                                : const Icon(Icons.camera_alt, size: 20),
                             label: Text(
-                              _isProcessing ? 'SCANNING...' : 'SCAN PASSPORT',
+                              _isProcessing ? 'SCANNING...' : 'START SCAN',
                               style: const TextStyle(
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 1.5,
@@ -365,6 +762,15 @@ class _MRZScannerScreenState extends State<MRZScannerScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    if (_frameCount > 0)
+                      Text(
+                        'Frames processed: $_frameCount',
+                        style: TextStyle(
+                          color: Colors.white.withAlpha(150),
+                          fontSize: 12,
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -373,6 +779,15 @@ class _MRZScannerScreenState extends State<MRZScannerScreen> {
   }
 
   Widget _buildTechOverlay() {
+    return const ScannerOverlay();
+  }
+}
+
+class ScannerOverlay extends StatelessWidget {
+  const ScannerOverlay({super.key});
+
+  @override
+  Widget build(BuildContext context) {
     return Stack(
       children: [
         // Mask with a hole
