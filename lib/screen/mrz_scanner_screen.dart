@@ -12,6 +12,7 @@ import 'package:mrzreader/screen/passport_form_screen.dart';
 import 'package:mrzreader/util/camera_helper.dart';
 import 'package:flutter/services.dart';
 import 'package:image_cropper/image_cropper.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 enum ScanMode { live, photo }
 
@@ -801,12 +802,12 @@ class _MRZScannerScreenState extends State<MRZScannerScreen>
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'SCANNER',
           style: TextStyle(
             fontWeight: FontWeight.w900,
-            letterSpacing: 2.0,
-            fontSize: 18,
+            letterSpacing: 2.0.w,
+            fontSize: 18.sp,
           ),
         ),
         centerTitle: true,
@@ -1009,11 +1010,11 @@ class ScannerOverlay extends StatelessWidget {
               Align(
                 alignment: Alignment.center,
                 child: Container(
-                  width: MediaQuery.of(context).size.width * 0.9,
-                  height: 320,
+                  width: MediaQuery.of(context).size.width * 0.9.sw,
+                  height: 320.h,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(16.r),
                   ),
                 ),
               ),
@@ -1024,8 +1025,8 @@ class ScannerOverlay extends StatelessWidget {
         Align(
           alignment: Alignment.center,
           child: SizedBox(
-            width: MediaQuery.of(context).size.width * 0.9,
-            height: 320,
+            width: MediaQuery.of(context).size.width * 0.9.sw,
+            height: 320.h,
             child: Stack(
               children: [
                 // Animated Frame Corners
@@ -1070,8 +1071,8 @@ class ScannerOverlay extends StatelessWidget {
       left: (topLeft || bottomLeft) ? 0 : null,
       right: (topRight || bottomRight) ? 0 : null,
       child: Container(
-        width: 32,
-        height: 32,
+        width: 32.w,
+        height: 32.h,
         decoration: BoxDecoration(
           border: Border(
             top: (topLeft || topRight)

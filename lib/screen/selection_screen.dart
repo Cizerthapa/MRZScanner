@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:mrzreader/screen/mrz_scanner_screen.dart';
 
 class SelectionScreen extends StatelessWidget {
@@ -9,12 +10,12 @@ class SelectionScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'SELECT MODE',
           style: TextStyle(
             fontWeight: FontWeight.w900,
-            letterSpacing: 2.0,
-            fontSize: 18,
+            letterSpacing: 2.0.w,
+            fontSize: 18.sp,
           ),
         ),
         centerTitle: true,
@@ -23,7 +24,7 @@ class SelectionScreen extends StatelessWidget {
       ),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: EdgeInsets.all(24.0.r),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -43,7 +44,7 @@ class SelectionScreen extends StatelessWidget {
                   );
                 },
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: 24.h),
               _buildOptionCard(
                 context,
                 title: 'PHOTO SCAN',
@@ -79,44 +80,44 @@ class SelectionScreen extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(20.r),
         child: Container(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(24.r),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: color.withOpacity(0.3), width: 2),
+            color: Colors.white.withAlpha(10),
+            borderRadius: BorderRadius.circular(20.r),
+            border: Border.all(color: color.withAlpha(76), width: 2.w),
           ),
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(16.r),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.2),
+                  color: color.withAlpha(51),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(icon, color: color, size: 32),
+                child: Icon(icon, color: color, size: 32.r),
               ),
-              const SizedBox(width: 20),
+              SizedBox(width: 20.w),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.white,
-                        fontSize: 18,
+                        fontSize: 18.sp,
                         fontWeight: FontWeight.bold,
-                        letterSpacing: 1.2,
+                        letterSpacing: 1.2.w,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4.h),
                     Text(
                       description,
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
-                        fontSize: 14,
+                        color: Colors.white.withAlpha(178),
+                        fontSize: 14.sp,
                       ),
                     ),
                   ],
@@ -124,8 +125,8 @@ class SelectionScreen extends StatelessWidget {
               ),
               Icon(
                 Icons.arrow_forward_ios,
-                color: Colors.white.withOpacity(0.3),
-                size: 16,
+                color: Colors.white.withAlpha(76),
+                size: 16.r,
               ),
             ],
           ),

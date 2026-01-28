@@ -1,6 +1,10 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:mrzreader/model/passport_data.dart';
+
 import 'package:printing/printing.dart';
 import '../service/form_filler_service.dart';
 
@@ -51,9 +55,9 @@ class _PassportFormScreenState extends State<PassportFormScreen> {
       // For example: send to API, save to database, etc.
 
       // Print the values for demonstration
-      print('Form Data:');
+      log('Form Data:');
       _controllers.forEach((key, controller) {
-        print('$key: ${controller.text}');
+        log('$key: ${controller.text}');
       });
 
       // Optional: Navigate back after submission
@@ -153,12 +157,12 @@ class _PassportFormScreenState extends State<PassportFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'DOCUMENT DETAILS',
           style: TextStyle(
             fontWeight: FontWeight.w900,
-            letterSpacing: 1.5,
-            fontSize: 16,
+            letterSpacing: 1.5.w,
+            fontSize: 16.sp,
           ),
         ),
         centerTitle: true,
@@ -184,7 +188,7 @@ class _PassportFormScreenState extends State<PassportFormScreen> {
           ),
         ),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+          padding: EdgeInsets.symmetric(horizontal: 20.0.w, vertical: 10.0.h),
           child: Form(
             key: _formKey,
             child: Column(
@@ -279,28 +283,28 @@ class _PassportFormScreenState extends State<PassportFormScreen> {
 
   Widget _buildStatusCard() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(20.r),
       decoration: BoxDecoration(
-        color: Colors.blueAccent.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+        color: Colors.blueAccent.withAlpha(25),
+        borderRadius: BorderRadius.circular(20.r),
+        border: Border.all(color: Colors.blueAccent.withAlpha(76)),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: EdgeInsets.all(10.r),
             decoration: BoxDecoration(
-              color: Colors.blueAccent.withOpacity(0.2),
+              color: Colors.blueAccent.withAlpha(51),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child: Icon(
               Icons.verified_rounded,
               color: Colors.blueAccent,
-              size: 28,
+              size: 28.r,
             ),
           ),
           const SizedBox(width: 16),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -308,15 +312,15 @@ class _PassportFormScreenState extends State<PassportFormScreen> {
                   'SCAN COMPLETE',
                   style: TextStyle(
                     fontWeight: FontWeight.w900,
-                    fontSize: 14,
+                    fontSize: 14.sp,
                     color: Colors.blueAccent,
-                    letterSpacing: 1.2,
+                    letterSpacing: 1.2.w,
                   ),
                 ),
-                SizedBox(height: 4),
+                SizedBox(height: 4.h),
                 Text(
                   'Please verify the extracted information.',
-                  style: TextStyle(fontSize: 12, color: Colors.white70),
+                  style: TextStyle(fontSize: 12.sp, color: Colors.white70),
                 ),
               ],
             ),
@@ -335,29 +339,29 @@ class _PassportFormScreenState extends State<PassportFormScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 8.0, bottom: 12.0),
+          padding: EdgeInsets.only(left: 8.0.w, bottom: 12.0.h),
           child: Row(
             children: [
-              Icon(icon, size: 18, color: Colors.blueAccent.withOpacity(0.7)),
-              const SizedBox(width: 8),
+              Icon(icon, size: 18.r, color: Colors.blueAccent.withAlpha(178)),
+              SizedBox(width: 8.w),
               Text(
                 title,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 12.sp,
                   fontWeight: FontWeight.w900,
-                  color: Colors.blueAccent.withOpacity(0.7),
-                  letterSpacing: 1.5,
+                  color: Colors.blueAccent.withAlpha(178),
+                  letterSpacing: 1.5.w,
                 ),
               ),
             ],
           ),
         ),
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(20.r),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.04),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withOpacity(0.08)),
+            color: Colors.white.withAlpha(10),
+            borderRadius: BorderRadius.circular(24.r),
+            border: Border.all(color: Colors.white.withAlpha(20)),
           ),
           child: Column(children: children),
         ),
@@ -378,7 +382,7 @@ class _PassportFormScreenState extends State<PassportFormScreen> {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.blueAccent.withOpacity(0.3),
+                color: Colors.blueAccent.withAlpha(76),
                 blurRadius: 15,
                 offset: const Offset(0, 5),
               ),
@@ -393,12 +397,12 @@ class _PassportFormScreenState extends State<PassportFormScreen> {
                 borderRadius: BorderRadius.circular(16),
               ),
             ),
-            child: const Text(
+            child: Text(
               'SAVE DATA',
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 14.sp,
                 fontWeight: FontWeight.w900,
-                letterSpacing: 1.5,
+                letterSpacing: 1.5.w,
                 color: Colors.white,
               ),
             ),
@@ -407,7 +411,7 @@ class _PassportFormScreenState extends State<PassportFormScreen> {
         const SizedBox(height: 16),
         Container(
           width: double.infinity,
-          height: 56,
+          height: 56.h,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             gradient: const LinearGradient(
@@ -415,7 +419,7 @@ class _PassportFormScreenState extends State<PassportFormScreen> {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.purpleAccent.withOpacity(0.3),
+                color: Colors.purpleAccent.withAlpha(76),
                 blurRadius: 15,
                 offset: const Offset(0, 5),
               ),
@@ -430,17 +434,22 @@ class _PassportFormScreenState extends State<PassportFormScreen> {
                 borderRadius: BorderRadius.circular(16),
               ),
             ),
-            child: const Row(
+            child: Row(
+              // Removed const here
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.picture_as_pdf_rounded, color: Colors.white),
-                SizedBox(width: 8),
+                Icon(
+                  Icons.picture_as_pdf_rounded,
+                  color: Colors.white,
+                  size: 24.r,
+                ),
+                SizedBox(width: 8.w),
                 Text(
                   'GENERATE FORM (PDF)',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 14.sp,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: 1.5,
+                    letterSpacing: 1.5.w,
                     color: Colors.white,
                   ),
                 ),
@@ -448,14 +457,14 @@ class _PassportFormScreenState extends State<PassportFormScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: 16.h),
         SizedBox(
           width: double.infinity,
-          height: 56,
+          height: 56.h,
           child: OutlinedButton(
             onPressed: () => Navigator.pop(context),
             style: OutlinedButton.styleFrom(
-              side: BorderSide(color: Colors.white.withOpacity(0.2)),
+              side: BorderSide(color: Colors.white.withAlpha(51)),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -463,10 +472,10 @@ class _PassportFormScreenState extends State<PassportFormScreen> {
             child: Text(
               'SCAN AGAIN',
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 14.sp,
                 fontWeight: FontWeight.w900,
-                letterSpacing: 1.5,
-                color: Colors.white.withOpacity(0.8),
+                letterSpacing: 1.5.w,
+                color: Colors.white.withAlpha(204),
               ),
             ),
           ),
@@ -482,45 +491,45 @@ class _PassportFormScreenState extends State<PassportFormScreen> {
     IconData? icon,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: EdgeInsets.only(bottom: 16.h),
       child: TextFormField(
         controller: _controllers[label],
-        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+        style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w500),
         decoration: InputDecoration(
           labelText: label,
           labelStyle: TextStyle(
-            color: Colors.white.withOpacity(0.5),
-            fontSize: 13,
+            color: Colors.white.withAlpha(128),
+            fontSize: 13.sp,
           ),
           prefixIcon: icon != null
-              ? Icon(icon, size: 20, color: Colors.blueAccent.withOpacity(0.5))
+              ? Icon(icon, size: 20.r, color: Colors.blueAccent.withAlpha(128))
               : null,
           filled: true,
           fillColor: readOnly
-              ? Colors.white.withOpacity(0.02)
-              : Colors.black.withOpacity(0.1),
+              ? Colors.white.withAlpha(10)
+              : Colors.black.withAlpha(25),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+            borderRadius: BorderRadius.circular(12.r),
+            borderSide: BorderSide(color: Colors.white.withAlpha(25)),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+            borderRadius: BorderRadius.circular(12.r),
+            borderSide: BorderSide(color: Colors.white.withAlpha(25)),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(12.r),
             borderSide: const BorderSide(color: Colors.blueAccent),
           ),
           suffixIcon: readOnly
               ? Icon(
                   Icons.lock_outline_rounded,
-                  size: 16,
-                  color: Colors.white.withOpacity(0.3),
+                  size: 16.r,
+                  color: Colors.white.withAlpha(76),
                 )
               : null,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 16,
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: 16.w,
+            vertical: 16.h,
           ),
         ),
         readOnly: readOnly,
