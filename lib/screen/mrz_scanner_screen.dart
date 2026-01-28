@@ -288,7 +288,7 @@ class _MRZScannerScreenState extends State<MRZScannerScreen>
 
       // Store raw text for debugging
       _lastRawText = recognizedText.text;
-      if (recognizedText.text.length > 0 && _frameCount % 20 == 0) {
+      if (recognizedText.text.isNotEmpty && _frameCount % 20 == 0) {
         developer.log(
           '📝 Raw recognized text (sample):\n'
           '${recognizedText.text.substring(0, min(200, recognizedText.text.length))}${recognizedText.text.length > 200 ? '...' : ''}',
@@ -425,103 +425,128 @@ class _MRZScannerScreenState extends State<MRZScannerScreen>
   }
 
   List<String> _extractMRZLines(String text) {
-    final lines = text.split('\n');
-    final mrzLines = <String>[];
+    try {
+      final lines = text.split('\n');
+      final mrzLines = <String>[];
 
-    developer.log(
-      '📄 Extracting MRZ lines from ${lines.length} text lines',
-      name: _logName,
-    );
+      developer.log(
+        '📄 Extracting MRZ lines from ${lines.length} text lines',
+        name: _logName,
+      );
 
-    for (var i = 0; i < lines.length; i++) {
-      final originalLine = lines[i];
-      final cleaned = originalLine
-          .replaceAll(' ', '')
-          .replaceAll('.', '')
-          .replaceAll(',', '')
-          .replaceAll(';', '')
-          .toUpperCase()
-          .trim();
+      for (var i = 0; i < lines.length; i++) {
+        final originalLine = lines[i];
+        try {
+          final cleaned = originalLine
+              .replaceAll(' ', '')
+              .replaceAll('.', '')
+              .replaceAll(',', '')
+              .replaceAll(';', '')
+              .toUpperCase()
+              .trim();
 
-      if (cleaned.isEmpty) continue;
+          if (cleaned.isEmpty) continue;
 
-      final length = cleaned.length;
-      final looksLikeMRZ = _looksLikeMRZ(cleaned);
+          final length = cleaned.length;
+          final looksLikeMRZ = _looksLikeMRZ(cleaned);
 
-      // Relaxed length requirements - allow ±3 characters for OCR errors
-      if (looksLikeMRZ && length >= 27) {
-        // Changed from strict 30/36/44
-        developer.log(
-          '✅ Line $i qualifies as MRZ: $cleaned (Length: $length)',
-          name: _logName,
-        );
-        mrzLines.add(cleaned);
-      } else {
-        if (length >= 25 && _frameCount % 40 == 0) {
+          // Relaxed length requirements - allow ±3 characters for OCR errors
+          if (looksLikeMRZ && length >= 27) {
+            // Changed from strict 30/36/44
+            developer.log(
+              '✅ Line $i qualifies as MRZ: $cleaned (Length: $length)',
+              name: _logName,
+            );
+            mrzLines.add(cleaned);
+          } else {
+            if (length >= 25 && _frameCount % 40 == 0) {
+              developer.log(
+                '❌ Line $i rejected as MRZ:\n'
+                '   Original: "$originalLine"\n'
+                '   Cleaned: "$cleaned"\n'
+                '   Length: $length, LooksLikeMRZ: $looksLikeMRZ',
+                name: _logName,
+              );
+            }
+          }
+        } catch (e) {
           developer.log(
-            '❌ Line $i rejected as MRZ:\n'
-            '   Original: "$originalLine"\n'
-            '   Cleaned: "$cleaned"\n'
-            '   Length: $length, LooksLikeMRZ: $looksLikeMRZ',
+            '⚠️ Error processing line $i',
+            error: e,
             name: _logName,
           );
+          continue;
         }
       }
-    }
 
-    return mrzLines;
+      return mrzLines;
+    } catch (e, stackTrace) {
+      developer.log(
+        '❌ Error extracting MRZ lines',
+        error: e,
+        stackTrace: stackTrace,
+        name: _logName,
+      );
+      return [];
+    }
   }
 
   bool _looksLikeMRZ(String line) {
-    if (line.isEmpty) return false;
+    try {
+      if (line.isEmpty) return false;
 
-    // MRZ contains A-Z, 0-9, and < characters
-    final mrzPattern = RegExp(r'^[A-Z0-9<]+$');
-    if (!mrzPattern.hasMatch(line)) {
+      // MRZ contains A-Z, 0-9, and < characters
+      final mrzPattern = RegExp(r'^[A-Z0-9<]+$');
+      if (!mrzPattern.hasMatch(line)) {
+        return false;
+      }
+
+      // Count specific characters
+      final angleCount = '<'.allMatches(line).length;
+      final digitCount = RegExp(r'[0-9]').allMatches(line).length;
+      final letterCount = RegExp(r'[A-Z]').allMatches(line).length;
+
+      // Calculate ratios
+      final totalChars = line.length;
+      final digitRatio = digitCount / totalChars;
+      final letterRatio = letterCount / totalChars;
+
+      // Typical MRZ characteristics - RELAXED RULES:
+      final hasAngles = angleCount >= 1; // Changed from 2 to 1
+      final hasReasonableMix =
+          digitRatio > 0.05 && letterRatio > 0.2; // More lenient
+      final startsWithDocType =
+          line.startsWith('P<') ||
+          line.startsWith('PB') || // Added - your passport shows "PB"
+          line.startsWith('V<') ||
+          line.startsWith('I<') ||
+          line.startsWith('A<');
+
+      // Accept if EITHER has document type OR has good characteristics
+      final isLikelyMRZ =
+          hasAngles &&
+          (hasReasonableMix || startsWithDocType || angleCount >= 3);
+
+      if (_frameCount % 50 == 0 && line.length >= 25) {
+        developer.log(
+          '🔬 MRZ analysis for "$line":\n'
+          '   Length: $totalChars\n'
+          '   Angle chars: $angleCount\n'
+          '   Digits: $digitCount (${(digitRatio * 100).toStringAsFixed(1)}%)\n'
+          '   Letters: $letterCount (${(letterRatio * 100).toStringAsFixed(1)}%)\n'
+          '   Starts with doc type: $startsWithDocType\n'
+          '   Has angles: $hasAngles\n'
+          '   Has reasonable mix: $hasReasonableMix\n'
+          '   Final verdict: $isLikelyMRZ',
+          name: _logName,
+        );
+      }
+
+      return isLikelyMRZ;
+    } catch (e) {
+      developer.log('⚠️ Error analyzing MRZ pattern', error: e, name: _logName);
       return false;
     }
-
-    // Count specific characters
-    final angleCount = '<'.allMatches(line).length;
-    final digitCount = RegExp(r'[0-9]').allMatches(line).length;
-    final letterCount = RegExp(r'[A-Z]').allMatches(line).length;
-
-    // Calculate ratios
-    final totalChars = line.length;
-    final digitRatio = digitCount / totalChars;
-    final letterRatio = letterCount / totalChars;
-
-    // Typical MRZ characteristics - RELAXED RULES:
-    final hasAngles = angleCount >= 1; // Changed from 2 to 1
-    final hasReasonableMix =
-        digitRatio > 0.05 && letterRatio > 0.2; // More lenient
-    final startsWithDocType =
-        line.startsWith('P<') ||
-        line.startsWith('PB') || // Added - your passport shows "PB"
-        line.startsWith('V<') ||
-        line.startsWith('I<') ||
-        line.startsWith('A<');
-
-    // Accept if EITHER has document type OR has good characteristics
-    final isLikelyMRZ =
-        hasAngles && (hasReasonableMix || startsWithDocType || angleCount >= 3);
-
-    if (_frameCount % 50 == 0 && line.length >= 25) {
-      developer.log(
-        '🔬 MRZ analysis for "$line":\n'
-        '   Length: $totalChars\n'
-        '   Angle chars: $angleCount\n'
-        '   Digits: $digitCount (${(digitRatio * 100).toStringAsFixed(1)}%)\n'
-        '   Letters: $letterCount (${(letterRatio * 100).toStringAsFixed(1)}%)\n'
-        '   Starts with doc type: $startsWithDocType\n'
-        '   Has angles: $hasAngles\n'
-        '   Has reasonable mix: $hasReasonableMix\n'
-        '   Final verdict: $isLikelyMRZ',
-        name: _logName,
-      );
-    }
-
-    return isLikelyMRZ;
   }
 
   @override
