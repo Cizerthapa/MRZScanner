@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mrzreader/screen/mrz_scanner_screen.dart';
+import 'package:mrzreader/screen/selection_screen.dart';
 
 class MRZScannerApp extends StatelessWidget {
   const MRZScannerApp({super.key});
@@ -18,7 +18,7 @@ class MRZScannerApp extends StatelessWidget {
         primaryColor: Colors.blueAccent,
         scaffoldBackgroundColor: const Color(0xFF0F172A),
       ),
-      home: const MRZScannerScreen(),
+      home: const SelectionScreen(),
       debugShowCheckedModeBanner: false,
     );
   }

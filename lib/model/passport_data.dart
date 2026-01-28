@@ -40,12 +40,17 @@ class PassportData {
 
   String _formatDate(String date) {
     if (date.length == 6) {
+      if (!RegExp(r'^\d{6}$').hasMatch(date)) {
+        return date;
+      }
       String year = date.substring(0, 2);
       String month = date.substring(2, 4);
       String day = date.substring(4, 6);
 
       // Assume years 00-30 are 2000s, 31-99 are 1900s
-      int yearInt = int.parse(year);
+      int? yearInt = int.tryParse(year);
+      if (yearInt == null) return date;
+
       String fullYear = yearInt <= 30 ? '20$year' : '19$year';
 
       return '$day/$month/$fullYear';

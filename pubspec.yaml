@@ -39,6 +39,8 @@ dependencies:
   flutter_mrz_scanner: ^2.2.1
   printing: ^5.14.2
   path_provider: ^2.1.5
+  image_cropper: ^11.0.0
+  flutter_screenutil: ^5.9.3
 
 dev_dependencies:
   flutter_test:

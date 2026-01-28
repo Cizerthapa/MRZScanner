@@ -11,9 +11,14 @@ import 'package:mrzreader/service/mrz_parser.dart';
 import 'package:mrzreader/screen/passport_form_screen.dart';
 import 'package:mrzreader/util/camera_helper.dart';
 import 'package:flutter/services.dart';
+import 'package:image_cropper/image_cropper.dart';
+
+enum ScanMode { live, photo }
 
 class MRZScannerScreen extends StatefulWidget {
-  const MRZScannerScreen({super.key});
+  final ScanMode scanMode;
+
+  const MRZScannerScreen({super.key, this.scanMode = ScanMode.live});
 
   @override
   State<MRZScannerScreen> createState() => _MRZScannerScreenState();
@@ -118,10 +123,13 @@ class _MRZScannerScreenState extends State<MRZScannerScreen>
 
       setState(() {
         _isInitialized = true;
-        _statusMessage = 'Align passport MRZ code within the frame';
+        _statusMessage = 'Tap "START SCAN" to read passport';
       });
 
-      _startScanning();
+      // _startScanning(); // Don't start automatically
+      if (widget.scanMode == ScanMode.live) {
+        _startScanning();
+      }
     } on CameraException catch (e) {
       developer.log(
         '❌ CameraException during initialization:',
@@ -168,6 +176,20 @@ class _MRZScannerScreenState extends State<MRZScannerScreen>
       _frameCount = 0;
       _lastLoggedFrame = 0;
       developer.log('✅ Camera stream started successfully', name: _logName);
+
+      // Auto-stop after 3 seconds
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted && _cameraController!.value.isStreamingImages) {
+          developer.log(
+            '⏰ Scan timeout reached (3s) - stopping scan',
+            name: _logName,
+          );
+          _stopScanning();
+          setState(() {
+            _statusMessage = 'Scan timed out. Tap to try again.';
+          });
+        }
+      });
     } on CameraException catch (e) {
       developer.log(
         '❌ CameraException starting image stream:',
@@ -189,11 +211,11 @@ class _MRZScannerScreenState extends State<MRZScannerScreen>
     }
   }
 
-  void _stopScanning() {
+  Future<void> _stopScanning() async {
     if (_cameraController != null &&
         _cameraController!.value.isStreamingImages) {
       developer.log('🛑 Stopping camera image stream...', name: _logName);
-      _cameraController!.stopImageStream();
+      await _cameraController!.stopImageStream();
       developer.log('✅ Camera stream stopped', name: _logName);
 
       // Log scanning statistics
@@ -235,6 +257,11 @@ class _MRZScannerScreenState extends State<MRZScannerScreen>
 
     if (!mounted) {
       developer.log('⚠️ Skipping frame - widget not mounted', name: _logName);
+      return;
+    }
+
+    // Double check mode
+    if (widget.scanMode == ScanMode.photo) {
       return;
     }
 
@@ -359,8 +386,24 @@ class _MRZScannerScreenState extends State<MRZScannerScreen>
               '❌ MRZ parsing failed - invalid format',
               name: _logName,
             );
+            if (widget.scanMode == ScanMode.photo) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('No valid MRZ data found in photo'),
+                  ),
+                );
+              }
+            }
           }
         } else {
+          if (widget.scanMode == ScanMode.photo) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('No MRZ lines detected in photo')),
+              );
+            }
+          }
           if (_frameCount % 25 == 0) {
             developer.log(
               '🔍 Need at least 2 MRZ lines, found ${mrzLines.length}',
@@ -420,6 +463,131 @@ class _MRZScannerScreenState extends State<MRZScannerScreen>
           '⚠️ Frame processing completed but widget not mounted',
           name: _logName,
         );
+      }
+    }
+  }
+
+  Future<void> _takePictureAndScan() async {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      return;
+    }
+    if (_isProcessing) return;
+
+    setState(() {
+      _isProcessing = true;
+      _statusMessage = 'Capturing photo...';
+    });
+
+    try {
+      final XFile file = await _cameraController!.takePicture();
+
+      if (!mounted) return;
+
+      setState(() {
+        _statusMessage = 'Cropping photo...';
+      });
+
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: file.path,
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 100,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Crop MRZ Zone',
+            toolbarColor: Colors.blueAccent,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.original,
+            lockAspectRatio: false,
+          ),
+          IOSUiSettings(
+            title: 'Crop MRZ Zone',
+            aspectRatioLockEnabled: false,
+            resetAspectRatioEnabled: false,
+          ),
+        ],
+      );
+
+      if (croppedFile == null) {
+        developer.log('Cropping cancelled', name: _logName);
+        setState(() {
+          _isProcessing = false;
+          _statusMessage = 'Capture cancelled';
+        });
+        return;
+      }
+
+      setState(() {
+        _statusMessage = 'Processing photo...';
+      });
+
+      final inputImage = InputImage.fromFilePath(croppedFile.path);
+      final recognizedText = await _textRecognizer.processImage(inputImage);
+
+      // Reuse the existing extraction and parsing logic
+      _processRecognizedText(recognizedText);
+    } catch (e) {
+      developer.log('Error taking picture', error: e, name: _logName);
+      setState(() {
+        _statusMessage = 'Error: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+          // Restore default message
+          if (_cameraController != null &&
+              _cameraController!.value.isInitialized) {
+            _statusMessage = widget.scanMode == ScanMode.live
+                ? 'Tap "START SCAN" to read'
+                : 'Tap "CAPTURE" to take photo';
+          }
+        });
+      }
+    }
+  }
+
+  // Extracted from original _processFrame to be reused
+  Future<void> _processRecognizedText(RecognizedText recognizedText) async {
+    // Extract potential MRZ lines
+    List<String> mrzLines = _extractMRZLines(recognizedText.text);
+    _lastMRZAttempts = mrzLines;
+
+    if (mrzLines.isNotEmpty) {
+      if (mrzLines.length >= 2) {
+        PassportData? passportData = MRZParser.parse(mrzLines);
+
+        if (passportData != null) {
+          _stopScanning();
+
+          if (mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    PassportFormScreen(passportData: passportData),
+              ),
+            ).then((_) {
+              if (mounted && widget.scanMode == ScanMode.live) {
+                _isProcessing = false;
+                _startScanning();
+              }
+            });
+          }
+          return;
+        } else {
+          // ... parsing failed
+          if (widget.scanMode == ScanMode.photo && mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('No valid MRZ found')));
+          }
+        }
+      }
+    } else {
+      if (widget.scanMode == ScanMode.photo && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('No text detected')));
       }
     }
   }
@@ -723,16 +891,21 @@ class _MRZScannerScreenState extends State<MRZScannerScreen>
                         child: BackdropFilter(
                           filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
                           child: ElevatedButton.icon(
-                            onPressed: () {
+                            onPressed: () async {
                               developer.log(
                                 'Manual scan button pressed',
                                 name: _logName,
                               );
                               if (!_isProcessing) {
-                                _stopScanning();
-                                _startScanning();
+                                if (widget.scanMode == ScanMode.live) {
+                                  await _stopScanning();
+                                  _startScanning();
+                                } else {
+                                  _takePictureAndScan();
+                                }
                               }
                             },
+
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.blueAccent.withAlpha(63),
                               foregroundColor: Colors.white,
@@ -756,7 +929,11 @@ class _MRZScannerScreenState extends State<MRZScannerScreen>
                                   )
                                 : const Icon(Icons.camera_alt, size: 20),
                             label: Text(
-                              _isProcessing ? 'SCANNING...' : 'START SCAN',
+                              _isProcessing
+                                  ? 'PROCESSING...'
+                                  : (widget.scanMode == ScanMode.live
+                                        ? 'START SCAN'
+                                        : 'CAPTURE'),
                               style: const TextStyle(
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 1.5,
@@ -833,7 +1010,7 @@ class ScannerOverlay extends StatelessWidget {
                 alignment: Alignment.center,
                 child: Container(
                   width: MediaQuery.of(context).size.width * 0.9,
-                  height: 160,
+                  height: 320,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
@@ -848,7 +1025,7 @@ class ScannerOverlay extends StatelessWidget {
           alignment: Alignment.center,
           child: SizedBox(
             width: MediaQuery.of(context).size.width * 0.9,
-            height: 160,
+            height: 320,
             child: Stack(
               children: [
                 // Animated Frame Corners
